@@ -1,0 +1,99 @@
+service: simple-vpc-lambda
+
+provider:
+  name: aws
+  runtime: python3.8
+  stage: dev
+  region: us-east-1
+  iamRoleStatements:
+    - Effect: Allow
+      Action: 'sqs:*'
+      Resource: '*'
+    - Effect: Allow
+      Action: 'sns:*'
+      Resource: '*'
+  vpc:
+    securityGroupIds:
+      - !GetAtt SimpleVPCLambdaSecurityGroup.GroupId
+    subnetIds:
+      - !Ref SubnetAPrivate
+      - !Ref SubnetBPrivate
+
+functions:
+  handleSqsMessage:
+    handler: handler.main
+    maximumRetryAttempts: 0
+    maximumEventAge: 60
+    events:
+      - sns: FromTopic
+    destinations:
+      onSuccess: arn:aws:sqs:us-east-1:419341331043:ToQueue-dev
+      onFailure: arn:aws:sqs:us-east-1:419341331043:ErrorQueue-dev
+
+resources:
+  Resources:
+    VPC:
+      Type: 'AWS::EC2::VPC'
+      Properties:
+        CidrBlock: !Sub '10.0.0.0/16'
+        EnableDnsSupport: true
+        EnableDnsHostnames: true
+        InstanceTenancy: default
+    SubnetAPrivate:
+      Type: 'AWS::EC2::Subnet'
+      Properties:
+        AvailabilityZone: !Select [0, !GetAZs '']
+        CidrBlock: !Sub '10.0.128.0/20'
+        VpcId: !Ref VPC
+    SubnetBPublic:
+      Type: 'AWS::EC2::Subnet'
+      Properties:
+        AvailabilityZone: !Select [1, !GetAZs '']
+        CidrBlock: !Sub '10.0.16.0/20'
+        MapPublicIpOnLaunch: true
+        VpcId: !Ref VPC
+    SubnetBPrivate:
+      Type: 'AWS::EC2::Subnet'
+      Properties:
+        AvailabilityZone: !Select [1, !GetAZs '']
+        CidrBlock: !Sub '10.0.144.0/20'
+        VpcId: !Ref VPC
+    RouteTableAPrivate:
+      Type: 'AWS::EC2::RouteTable'
+      Properties:
+        VpcId: !Ref VPC
+    RouteTableBPrivate:
+      Type: 'AWS::EC2::RouteTable'
+      Properties:
+        VpcId: !Ref VPC
+    RouteTableAssociationAPrivate:
+      Type: 'AWS::EC2::SubnetRouteTableAssociation'
+      Properties:
+        SubnetId: !Ref SubnetAPrivate
+        RouteTableId: !Ref RouteTableAPrivate
+    RouteTableAssociationBPrivate:
+      Type: 'AWS::EC2::SubnetRouteTableAssociation'
+      Properties:
+        SubnetId: !Ref SubnetBPrivate
+        RouteTableId: !Ref RouteTableBPrivate
+    SimpleVPCLambdaSecurityGroup:
+      Type: 'AWS::EC2::SecurityGroup'
+      Properties:
+        VpcId: !Ref VPC
+        GroupDescription: 'Security group for NAT Gateway Lambda'
+    ToQueue:
+        Type: AWS::SQS::Queue
+        Properties:
+          QueueName: ToQueue-dev
+    ErrorQueue:
+        Type: AWS::SQS::Queue
+        Properties:
+          QueueName: ErrorQueue-dev
+
+  Outputs:
+    VPC:
+      Description: 'VPC'
+      Value: !Ref VPC
+    SubnetsPrivate:
+      Description: 'Subnets private'
+      Value: !Join [',', [!Ref SubnetAPrivate, !Ref SubnetBPrivate]]
