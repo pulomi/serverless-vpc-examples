@@ -1,4 +1,4 @@
-service: simple-vpc-lambda
+service: lambda-destinations
 
 provider:
   name: aws
@@ -14,7 +14,7 @@ provider:
       Resource: '*'
   vpc:
     securityGroupIds:
-      - !GetAtt SimpleVPCLambdaSecurityGroup.GroupId
+      - !GetAtt LambdaDestinationSecurityGroup.GroupId
     subnetIds:
       - !Ref SubnetAPrivate
       - !Ref SubnetBPrivate
@@ -76,7 +76,7 @@ resources:
       Properties:
         SubnetId: !Ref SubnetBPrivate
         RouteTableId: !Ref RouteTableBPrivate
-    SimpleVPCLambdaSecurityGroup:
+    LambdaDestinationSecurityGroup:
       Type: 'AWS::EC2::SecurityGroup'
       Properties:
         VpcId: !Ref VPC
